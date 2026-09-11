@@ -6,12 +6,15 @@ requires-python = ">=3.12"
 dependencies = [
     "click>=8.1,<9",
     "httpx>=0.28,<1",
+    "pydantic>=2.11,<3",
     "python-dotenv>=1.0,<2",
+    "pyyaml>=6,<7",
 ]
 
 [project.scripts]
 resolve-address = "routes_api.adresses:cli"
 route-time = "routes_api.routes:cli"
+measure-benchmark = "routes_api.benchmark:cli"
 
 [dependency-groups]
 dev = [

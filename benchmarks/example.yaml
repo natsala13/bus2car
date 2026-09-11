@@ -1,0 +1,23 @@
+name: tel-aviv-smoke
+version: "1"
+state: Israel
+
+sources:
+  - id: tel-aviv-city-hall
+    label: Tel Aviv City Hall
+    address: Ibn Gabirol 69, Tel Aviv-Yafo, Israel
+
+destinations:
+  - id: savidor-center
+    label: Tel Aviv Savidor Center railway station
+    address: Tel Aviv Savidor Center, Tel Aviv-Yafo, Israel
+
+# Update these timezone-aware departure times before running the benchmark.
+times:
+  - 2026-09-14T08:00:00+03:00
+  - 2026-09-14T13:00:00+03:00
+
+transportation_ways:
+  - car
+  - bus
+  - bike

@@ -149,6 +149,7 @@ def get_route_time(
     *,
     client: GoogleMapsClient | None = None,
     save: bool = True,
+    use_cache: bool = True,
     route_data_path: Path = ROUTE_TIMES_PATH,
     geocoding_data_path: Path = GEOCODING_RESULTS_PATH,
 ) -> RouteResult:
@@ -165,7 +166,11 @@ def get_route_time(
     owns_client = client is None
     api_client = client or GoogleMapsClient()
     try:
-        response = api_client.compute_routes(request, field_mask=ROUTES_FIELD_MASK)
+        response = api_client.compute_routes(
+            request,
+            field_mask=ROUTES_FIELD_MASK,
+            use_cache=use_cache,
+        )
     finally:
         if owns_client:
             api_client.close()
@@ -214,12 +219,14 @@ def get_route_time(
     help="Timezone-aware ISO 8601 departure time; omitted means Google's current time.",
 )
 @click.option("--no-save", is_flag=True, help="Print the result without writing data CSVs.")
+@click.option("--no-cache", is_flag=True, help="Bypass cache reads and writes.")
 def cli(
     source: str,
     destination: str,
     transport: str,
     departure_time: str | None,
     no_save: bool,
+    no_cache: bool,
 ) -> None:
     """Measure one route from SOURCE to DESTINATION."""
 
@@ -230,6 +237,7 @@ def cli(
             transport,
             departure_time,
             save=not no_save,
+            use_cache=not no_cache,
         )
     except (GoogleApiError, KeyError, TypeError, ValueError) as exc:
         raise click.ClickException(str(exc)) from exc

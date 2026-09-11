@@ -6,6 +6,7 @@ The command-line tools create two UTF-8 CSV tables here:
   and resolution timestamps.
 - `route_times.csv`: source, destination, requested departure time, transport mode,
   duration, distance, and measurement provenance.
+- `benchmarks/*.csv`: one complete normalized distance-matrix run per benchmark.
 
 Generated CSV files are intentionally ignored by Git because they can contain
 private addresses and Google Maps Platform content. Only this schema description

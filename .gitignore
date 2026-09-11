@@ -7,9 +7,11 @@
 __pycache__/
 *.py[cod]
 .venv/
+.cache/
 
 # Generated measurements can contain private addresses and Google data.
 data/*.csv
+data/**/*.csv
 
 # macOS metadata.
 .DS_Store
