@@ -1,0 +1,15 @@
+# Local environment files may contain API keys and other secrets.
+.env
+.env.*
+!.env.example
+
+# Python-generated files.
+__pycache__/
+*.py[cod]
+.venv/
+
+# Generated measurements can contain private addresses and Google data.
+data/*.csv
+
+# macOS metadata.
+.DS_Store
