@@ -10,8 +10,11 @@ from urllib.parse import quote
 import httpx
 from dotenv import load_dotenv
 
+from routes_api.cache import ResponseCache
+
 
 ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
+ROUTE_MATRIX_URL = "https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix"
 GEOCODING_ADDRESS_URL = "https://geocode.googleapis.com/v4/geocode/address"
 DEFAULT_TIMEOUT_SECONDS = 30.0
 
@@ -40,11 +43,13 @@ class GoogleMapsClient:
         api_key: str | None = None,
         *,
         http_client: httpx.Client | None = None,
+        cache: ResponseCache | None = None,
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
     ) -> None:
         self.api_key = api_key or get_api_key()
         self._owns_client = http_client is None
         self.http_client = http_client or httpx.Client(timeout=timeout)
+        self.cache = cache or ResponseCache()
 
     def __enter__(self) -> GoogleMapsClient:
         return self
@@ -61,17 +66,38 @@ class GoogleMapsClient:
         request: Mapping[str, Any],
         *,
         field_mask: str,
+        use_cache: bool = True,
     ) -> dict[str, Any]:
-        response = self.http_client.post(
+        payload = self._request_json(
+            "POST",
             ROUTES_URL,
-            headers={
-                "Content-Type": "application/json",
-                "X-Goog-Api-Key": self.api_key,
-                "X-Goog-FieldMask": field_mask,
-            },
-            json=dict(request),
+            field_mask=field_mask,
+            json_body=dict(request),
+            use_cache=use_cache,
         )
-        return self._decode_response(response)
+        if not isinstance(payload, dict):
+            raise GoogleApiError("Google Routes returned an unexpected response shape")
+        return payload
+
+    def compute_route_matrix(
+        self,
+        request: Mapping[str, Any],
+        *,
+        field_mask: str,
+        use_cache: bool = True,
+    ) -> list[dict[str, Any]]:
+        payload = self._request_json(
+            "POST",
+            ROUTE_MATRIX_URL,
+            field_mask=field_mask,
+            json_body=dict(request),
+            use_cache=use_cache,
+        )
+        if not isinstance(payload, list) or not all(
+            isinstance(element, dict) for element in payload
+        ):
+            raise GoogleApiError("Google Route Matrix returned an unexpected response shape")
+        return payload
 
     def geocode_address(
         self,
@@ -79,23 +105,64 @@ class GoogleMapsClient:
         *,
         language_code: str = "en",
         region_code: str = "IL",
+        use_cache: bool = True,
     ) -> dict[str, Any]:
         encoded_address = quote(address, safe="")
-        response = self.http_client.get(
-            f"{GEOCODING_ADDRESS_URL}/{encoded_address}",
-            headers={
-                "X-Goog-Api-Key": self.api_key,
-                "X-Goog-FieldMask": (
-                    "results.placeId,results.formattedAddress,results.location,"
-                    "results.granularity,results.types"
-                ),
-            },
-            params={"languageCode": language_code, "regionCode": region_code},
+        field_mask = (
+            "results.placeId,results.formattedAddress,results.location,"
+            "results.granularity,results.types"
         )
-        return self._decode_response(response)
+        payload = self._request_json(
+            "GET",
+            f"{GEOCODING_ADDRESS_URL}/{encoded_address}",
+            field_mask=field_mask,
+            params={"languageCode": language_code, "regionCode": region_code},
+            use_cache=use_cache,
+        )
+        if not isinstance(payload, dict):
+            raise GoogleApiError("Google Geocoding returned an unexpected response shape")
+        return payload
+
+    def _request_json(
+        self,
+        method: str,
+        url: str,
+        *,
+        field_mask: str,
+        json_body: Mapping[str, Any] | None = None,
+        params: Mapping[str, str] | None = None,
+        use_cache: bool,
+    ) -> Any:
+        cache_request = {
+            "method": method,
+            "url": url,
+            "field_mask": field_mask,
+            "json": json_body,
+            "params": params,
+        }
+        if use_cache:
+            cached = self.cache.get(cache_request)
+            if cached is not None:
+                return cached
+
+        response = self.http_client.request(
+            method,
+            url,
+            headers={
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": self.api_key,
+                "X-Goog-FieldMask": field_mask,
+            },
+            json=dict(json_body) if json_body is not None else None,
+            params=dict(params) if params is not None else None,
+        )
+        payload = self._decode_response(response)
+        if use_cache:
+            self.cache.set(cache_request, payload)
+        return payload
 
     @staticmethod
-    def _decode_response(response: httpx.Response) -> dict[str, Any]:
+    def _decode_response(response: httpx.Response) -> Any:
         try:
             payload = response.json()
         except ValueError as exc:
@@ -107,6 +174,4 @@ class GoogleMapsClient:
             error = payload.get("error", {}) if isinstance(payload, dict) else {}
             message = error.get("message") or response.reason_phrase
             raise GoogleApiError(f"Google API HTTP {response.status_code}: {message}")
-        if not isinstance(payload, dict):
-            raise GoogleApiError("Google returned an unexpected response shape")
         return payload

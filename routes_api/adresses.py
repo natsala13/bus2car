@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 import click
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from routes_api.api import GoogleApiError, GoogleMapsClient
 from routes_api.utils import GEOCODING_RESULTS_PATH, append_csv_row, utc_now_iso
@@ -26,6 +27,55 @@ GEOCODING_FIELDS = (
     "granularity",
     "types",
 )
+
+
+class Address(BaseModel):
+    """A named benchmark point represented in exactly one supported form."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1, pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+    label: str | None = None
+    address: str | None = None
+    place_id: str | None = None
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+
+    @model_validator(mode="after")
+    def validate_location_form(self) -> Address:
+        has_address = bool(self.address and self.address.strip())
+        has_place_id = bool(self.place_id and self.place_id.strip())
+        has_latitude = self.latitude is not None
+        has_longitude = self.longitude is not None
+        if has_latitude != has_longitude:
+            raise ValueError("latitude and longitude must be provided together")
+        if sum((has_address, has_place_id, has_latitude and has_longitude)) != 1:
+            raise ValueError(
+                "provide exactly one of address, place_id, or latitude/longitude"
+            )
+        return self
+
+    def to_waypoint(self) -> dict[str, Any]:
+        if self.address:
+            return {"address": self.address}
+        if self.place_id:
+            return {"placeId": self.place_id}
+        return {
+            "location": {
+                "latLng": {
+                    "latitude": self.latitude,
+                    "longitude": self.longitude,
+                }
+            }
+        }
+
+    @property
+    def display_value(self) -> str:
+        if self.address:
+            return self.address
+        if self.place_id:
+            return f"place_id:{self.place_id}"
+        return f"{self.latitude},{self.longitude}"
 
 
 def save_geocoding_results(
@@ -65,6 +115,7 @@ def resolve_address(
     data_path: Path = GEOCODING_RESULTS_PATH,
     language_code: str = "en",
     region_code: str = "IL",
+    use_cache: bool = True,
 ) -> list[dict[str, object]]:
     """Resolve an address through Geocoding API v4 and optionally save all matches."""
 
@@ -78,6 +129,7 @@ def resolve_address(
             address,
             language_code=language_code,
             region_code=region_code,
+            use_cache=use_cache,
         )
     finally:
         if owns_client:
@@ -132,7 +184,14 @@ def route_geocoding_rows(
 @click.option("--language", "language_code", default="en", show_default=True)
 @click.option("--region", "region_code", default="IL", show_default=True)
 @click.option("--no-save", is_flag=True, help="Print results without writing data CSV.")
-def cli(address: str, language_code: str, region_code: str, no_save: bool) -> None:
+@click.option("--no-cache", is_flag=True, help="Bypass cache reads and writes.")
+def cli(
+    address: str,
+    language_code: str,
+    region_code: str,
+    no_save: bool,
+    no_cache: bool,
+) -> None:
     """Resolve ADDRESS to Google Place IDs and coordinates."""
 
     try:
@@ -141,6 +200,7 @@ def cli(address: str, language_code: str, region_code: str, no_save: bool) -> No
             language_code=language_code,
             region_code=region_code,
             save=not no_save,
+            use_cache=not no_cache,
         )
     except (GoogleApiError, ValueError) as exc:
         raise click.ClickException(str(exc)) from exc

@@ -5,6 +5,7 @@ import httpx
 from click.testing import CliRunner
 
 from routes_api.api import GoogleMapsClient
+from routes_api.cache import ResponseCache
 from routes_api.routes import build_route_request, cli, get_route_time, parse_waypoint
 
 
@@ -55,7 +56,11 @@ def test_get_route_time_saves_mocked_results(tmp_path) -> None:
     route_path = tmp_path / "routes.csv"
     geocode_path = tmp_path / "geocoding.csv"
     with httpx.Client(transport=httpx.MockTransport(handler)) as http_client:
-        client = GoogleMapsClient("test-key", http_client=http_client)
+        client = GoogleMapsClient(
+            "test-key",
+            http_client=http_client,
+            cache=ResponseCache(tmp_path / "cache"),
+        )
         result = get_route_time(
             "A",
             "B",
@@ -78,13 +83,20 @@ def test_get_route_time_saves_mocked_results(tmp_path) -> None:
 
 
 def test_cli_uses_mocked_function(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "routes_api.routes.get_route_time",
-        lambda *args, **kwargs: get_route_time_result(),
+    arguments = {}
+
+    def fake_get_route_time(*args, **kwargs):
+        arguments.update(kwargs)
+        return get_route_time_result()
+
+    monkeypatch.setattr("routes_api.routes.get_route_time", fake_get_route_time)
+    result = CliRunner().invoke(
+        cli,
+        ["A", "B", "--transport", "bike", "--no-save", "--no-cache"],
     )
-    result = CliRunner().invoke(cli, ["A", "B", "--transport", "bike", "--no-save"])
     assert result.exit_code == 0
     assert '"duration_seconds": 60' in result.output
+    assert arguments["use_cache"] is False
 
 
 def get_route_time_result():

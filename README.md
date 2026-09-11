@@ -27,6 +27,7 @@ uv run resolve-address "הסוללים 3, תל אביב-יפו, ישראל"
 ```
 
 Use `--no-save` to inspect a result without adding it to the CSV.
+Use `--no-cache` to force a new billable API request.
 
 ## Measure one route
 
@@ -45,9 +46,33 @@ Supported transport names are `car`, `bus`, `bike`, `walk`, plus their Google-li
 aliases. Results are saved to `data/route_times.csv`. When address strings are used,
 embedded Routes API geocoding results are also saved to the geocoding table.
 
+By default, successful Google responses are cached locally for 24 hours under
+`.cache/google_maps/`. Repeating an identical request reuses that response. Pass
+`--no-cache` to bypass both cache reads and writes.
+
 `bus` requests prefer bus service, but Google documents that this preference is not
 a strict exclusion of other transit modes. Transit steps should therefore be
 inspected before classifying a route as bus-only.
+
+## Measure a benchmark
+
+Benchmarks are typed, versioned YAML files. They are fixed to `state: Israel` and
+contain source points, destination points, timezone-aware departure times, and
+transportation ways. Points accept exactly one of an address, Place ID, or coordinate
+pair. See `benchmarks/example.yaml` for a complete example.
+
+```bash
+uv run measure-benchmark benchmarks/example.yaml
+```
+
+This calls Compute Route Matrix in API-sized batches and writes one normalized CSV
+under `data/benchmarks/`. Transit batches never exceed 100 elements; other batches
+never exceed 625 elements. Every requested pair is written explicitly, including
+missing or failed routes.
+
+Use `--no-cache` to force fresh matrix requests or `--output PATH` to choose the CSV
+path. Update example departure times before running because Google only accepts
+limited past/future routing windows.
 
 ## Tests
 
