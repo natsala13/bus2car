@@ -6,21 +6,24 @@ import json
 import math
 import re
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import date, datetime, time
 from pathlib import Path
 from typing import Any, Iterator, Literal, Sequence
+from zoneinfo import ZoneInfo
 
 import click
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from routes_api.adresses import Address
+from routes_api.adresses import Address, add_new_adress
 from routes_api.api import GoogleApiError, GoogleMapsClient
 from routes_api.routes import TRANSPORT_MODES
 from routes_api.utils import DATA_DIR, append_csv_row, normalize_departure_time, parse_google_duration, utc_now_iso
 
 
 ISRAEL = "Israel"
+TEL_AVIV_TIME_ZONE = ZoneInfo("Asia/Jerusalem")
+BENCHMARKS_DIR = Path(__file__).resolve().parent.parent / "benchmarks"
 MATRIX_FIELD_MASK = ",".join(
     (
         "originIndex",
@@ -63,6 +66,7 @@ BENCHMARK_RESULT_FIELDS = (
 )
 
 TransportationWay = Literal["car", "bus", "bike", "walk", "transit"]
+BenchmarkTime = datetime | time
 
 
 class Benchmark(BaseModel):
@@ -75,14 +79,16 @@ class Benchmark(BaseModel):
     state: Literal["Israel"] = ISRAEL
     sources: list[Address] = Field(min_length=1)
     destinations: list[Address] = Field(min_length=1)
-    times: list[datetime] = Field(min_length=1)
+    times: list[BenchmarkTime] = Field(min_length=1)
     transportation_ways: list[TransportationWay] = Field(min_length=1)
 
     @field_validator("times")
     @classmethod
-    def require_aware_times(cls, values: list[datetime]) -> list[datetime]:
+    def require_aware_times(cls, values: list[BenchmarkTime]) -> list[BenchmarkTime]:
         for value in values:
-            if value.tzinfo is None or value.utcoffset() is None:
+            if isinstance(value, datetime) and (
+                value.tzinfo is None or value.utcoffset() is None
+            ):
                 raise ValueError("every benchmark time must include a UTC offset")
         return values
 
@@ -124,6 +130,74 @@ def load_benchmark(path: str | Path) -> Benchmark:
     if not isinstance(raw, dict):
         raise ValueError("benchmark YAML must contain a mapping at its root")
     return Benchmark.model_validate(raw)
+
+
+def _benchmark_slug(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+
+
+def create_benchmark(
+    *,
+    name: str,
+    version: str,
+    sources: Sequence[str],
+    destinations: Sequence[str],
+    times: Sequence[str | time | datetime],
+    transportation_ways: Sequence[TransportationWay],
+    output_path: str | Path | None = None,
+    client: GoogleMapsClient | None = None,
+    use_cache: bool = True,
+) -> Benchmark:
+    """Verify Tel Aviv points, build a typed benchmark, and save it as YAML."""
+
+    owns_client = client is None
+    api_client = client or GoogleMapsClient()
+    try:
+        signed_sources = [
+            add_new_adress(
+                source,
+                client=api_client,
+                use_cache=use_cache,
+            )
+            for source in sources
+        ]
+        signed_destinations = [
+            add_new_adress(
+                destination,
+                client=api_client,
+                use_cache=use_cache,
+            )
+            for destination in destinations
+        ]
+    finally:
+        if owns_client:
+            api_client.close()
+
+    benchmark = Benchmark.model_validate(
+        {
+            "name": name,
+            "version": version,
+            "state": ISRAEL,
+            "sources": signed_sources,
+            "destinations": signed_destinations,
+            "times": list(times),
+            "transportation_ways": list(transportation_ways),
+        }
+    )
+    destination_path = (
+        Path(output_path)
+        if output_path
+        else BENCHMARKS_DIR / f"{_benchmark_slug(name)}.yaml"
+    )
+    if destination_path.exists():
+        raise FileExistsError(f"refusing to overwrite existing benchmark: {destination_path}")
+    destination_path.parent.mkdir(parents=True, exist_ok=True)
+    serialized = benchmark.model_dump(mode="json", exclude_none=True)
+    destination_path.write_text(
+        yaml.safe_dump(serialized, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+    return benchmark
 
 
 def _iter_matrix_batches(
@@ -227,8 +301,29 @@ def _result_row(
 
 
 def _default_output_path(benchmark: Benchmark, run_id: str) -> Path:
-    slug = re.sub(r"[^a-z0-9]+", "-", benchmark.name.lower()).strip("-")
+    slug = _benchmark_slug(benchmark.name)
     return DATA_DIR / "benchmarks" / f"{slug}-{benchmark.version}-{run_id}.csv"
+
+
+def _measurement_departure_time(
+    benchmark_time: BenchmarkTime,
+    service_date: date | None,
+) -> str:
+    if isinstance(benchmark_time, datetime):
+        normalized = normalize_departure_time(benchmark_time)
+    else:
+        if service_date is None:
+            raise ValueError(
+                "benchmark contains times of day; provide service_date or --date YYYY-MM-DD"
+            )
+        local_departure = datetime.combine(
+            service_date,
+            benchmark_time,
+            tzinfo=TEL_AVIV_TIME_ZONE,
+        )
+        normalized = normalize_departure_time(local_departure)
+    assert normalized is not None
+    return normalized
 
 
 def measure_benchmark(
@@ -237,10 +332,16 @@ def measure_benchmark(
     client: GoogleMapsClient | None = None,
     output_path: str | Path | None = None,
     use_cache: bool = True,
+    service_date: date | str | None = None,
 ) -> BenchmarkRun:
     """Measure every source × destination × time × mode combination."""
 
     benchmark = load_benchmark(benchmark_file)
+    if isinstance(service_date, str):
+        try:
+            service_date = date.fromisoformat(service_date)
+        except ValueError as exc:
+            raise ValueError("service_date must use YYYY-MM-DD format") from exc
     measured_at_utc = utc_now_iso()
     run_id = datetime.fromisoformat(measured_at_utc.removesuffix("Z") + "+00:00").strftime(
         "%Y%m%dT%H%M%SZ"
@@ -257,11 +358,10 @@ def measure_benchmark(
     request_count = 0
     try:
         for departure in benchmark.times:
-            departure_time_utc = normalize_departure_time(departure)
-            assert departure_time_utc is not None
+            departure_time_utc = _measurement_departure_time(departure, service_date)
             for transport in benchmark.transportation_ways:
                 max_elements = 100 if TRANSPORT_MODES[transport] == "TRANSIT" else 625
-                for source_start, sources, destination_start, destinations in _iter_matrix_batches(
+                for _, sources, _, destinations in _iter_matrix_batches(
                     benchmark.sources,
                     benchmark.destinations,
                     max_elements=max_elements,
@@ -325,8 +425,14 @@ def measure_benchmark(
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
 )
 @click.option("--output", type=click.Path(dir_okay=False, path_type=Path))
+@click.option("--date", "service_date", help="Service date for time-only slots (YYYY-MM-DD).")
 @click.option("--no-cache", is_flag=True, help="Bypass cache reads and writes.")
-def cli(benchmark_file: Path, output: Path | None, no_cache: bool) -> None:
+def cli(
+    benchmark_file: Path,
+    output: Path | None,
+    service_date: str | None,
+    no_cache: bool,
+) -> None:
     """Measure every route defined by BENCHMARK_FILE."""
 
     try:
@@ -334,6 +440,7 @@ def cli(benchmark_file: Path, output: Path | None, no_cache: bool) -> None:
             benchmark_file,
             output_path=output,
             use_cache=not no_cache,
+            service_date=service_date,
         )
     except (GoogleApiError, OSError, TypeError, ValueError) as exc:
         raise click.ClickException(str(exc)) from exc

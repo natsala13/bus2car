@@ -54,15 +54,36 @@ By default, successful Google responses are cached locally for 24 hours under
 a strict exclusion of other transit modes. Transit steps should therefore be
 inspected before classifying a route as bus-only.
 
-## Measure a benchmark
+## Create and measure a benchmark
 
 Benchmarks are typed, versioned YAML files. They are fixed to `state: Israel` and
-contain source points, destination points, timezone-aware departure times, and
-transportation ways. Points accept exactly one of an address, Place ID, or coordinate
-pair. See `benchmarks/example.yaml` for a complete example.
+contain source points, destination points, local departure times, and transportation
+ways. Use `create_benchmark()` to add one: it passes every input through
+`add_new_adress()`, verifies the Google result, and stores the canonical Place ID and
+verification metadata in the YAML. The current verifier accepts addresses in the
+Tel Aviv urban area (Tel Aviv-Yafo and Ramat Gan).
+
+```python
+from routes_api.benchmark import create_benchmark
+
+create_benchmark(
+    name="My Tel Aviv benchmark",
+    version="1.0.0",
+    sources=["HaSolelim 3"],
+    destinations=["Yitzhak Sadeh 4"],
+    times=["07:00", "17:00"],
+    transportation_ways=["car", "bus", "bike"],
+)
+```
+
+The checked-in first benchmark is
+`benchmarks/tel_aviv_residential_to_employment_v1.yaml`. Its time entries are
+Asia/Jerusalem wall-clock slots, so choose the service date when measuring it:
 
 ```bash
-uv run measure-benchmark benchmarks/example.yaml
+uv run measure-benchmark \
+  benchmarks/tel_aviv_residential_to_employment_v1.yaml \
+  --date 2026-09-14
 ```
 
 This calls Compute Route Matrix in API-sized batches and writes one normalized CSV
@@ -71,8 +92,8 @@ never exceed 625 elements. Every requested pair is written explicitly, including
 missing or failed routes.
 
 Use `--no-cache` to force fresh matrix requests or `--output PATH` to choose the CSV
-path. Update example departure times before running because Google only accepts
-limited past/future routing windows.
+path. A benchmark may alternatively contain full timezone-aware datetimes, in which
+case `--date` is unnecessary. Google accepts only limited past/future routing windows.
 
 ## Tests
 

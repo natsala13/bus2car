@@ -1,0 +1,133 @@
+name: Tel Aviv residential to employment
+version: 1.0.0
+state: Israel
+sources:
+- id: jean-jaures-1
+  label: Jean Jaures 1
+  place_id: ChIJXVUTInhMHRURb3OnvlMRYUo
+  formatted_address: Jean Jaures St 1, Tel Aviv-Yafo, Israel
+  verified: true
+  verification_provider: google_geocoding_v4
+  verified_at_utc: '2026-09-11T16:41:20.424898Z'
+- id: gindi-tlv-hahashmonaim-100
+  label: Gindi TLV, HaHashmonaim 100
+  place_id: ChIJ4QEy33dLHRURxD10_VNT5Ws
+  formatted_address: HaHashmonaim St 100, Tel Aviv-Yafo, 60000, Israel
+  verified: true
+  verification_provider: google_geocoding_v4
+  verified_at_utc: '2026-09-11T16:41:20.931536Z'
+- id: hasolelim-3
+  label: Hasolelim 3
+  place_id: ChIJGzXfWJ9LHRUR3r2IKJhlNi4
+  formatted_address: HaSolelim St 3, Tel Aviv-Yafo, Israel
+  verified: true
+  verification_provider: google_geocoding_v4
+  verified_at_utc: '2026-09-11T16:41:20.940200Z'
+- id: haavoda-25
+  label: Haavoda 25
+  place_id: ChIJv80-NH5LHRURvXCWj5RAkPo
+  formatted_address: HaAvoda St 25, Tel Aviv-Yafo, Israel
+  verified: true
+  verification_provider: google_geocoding_v4
+  verified_at_utc: '2026-09-11T16:41:20.948525Z'
+- id: pinsker-24
+  label: Pinsker 24
+  place_id: ChIJ-YU8L35MHRUR_mLwgcwAS1E
+  formatted_address: Pinsker St 24, Tel Aviv-Yafo, Israel
+  verified: true
+  verification_provider: google_geocoding_v4
+  verified_at_utc: '2026-09-11T16:41:20.955160Z'
+- id: hakovshim-36
+  label: HaKovshim 36
+  place_id: ChIJTZt_NoRMHRURpKvIHwi_904
+  formatted_address: HaKovshim St 36, Tel Aviv-Yafo, Israel
+  verified: true
+  verification_provider: google_geocoding_v4
+  verified_at_utc: '2026-09-11T16:41:20.970224Z'
+- id: matmon-cohen-6
+  label: Matmon Cohen 6
+  place_id: ChIJR5kJXJJLHRURoh-DXFUgwB4
+  formatted_address: Matmon Cohen St 6, Tel Aviv-Yafo, Israel
+  verified: true
+  verification_provider: google_geocoding_v4
+  verified_at_utc: '2026-09-11T16:41:20.983634Z'
+- id: basel-24
+  label: Basel 24
+  place_id: ChIJNfdADItLHRURZAHiLSv-bBE
+  formatted_address: Basel St 24, Tel Aviv-Yafo, Israel
+  verified: true
+  verification_provider: google_geocoding_v4
+  verified_at_utc: '2026-09-11T16:41:20.996930Z'
+- id: hakishon-47
+  label: HaKishon 47
+  place_id: ChIJ-w4k4Z5MHRURW4zwBbz5DMA
+  formatted_address: HaKishon St 47, Tel Aviv-Yafo, Israel
+  verified: true
+  verification_provider: google_geocoding_v4
+  verified_at_utc: '2026-09-11T16:41:21.008882Z'
+- id: wingate-3
+  label: Wingate 3
+  place_id: ChIJ48UKl3FLHRURKEQd26q6Pjc
+  formatted_address: Wingate St 3, Tel Aviv-Yafo, Israel
+  verified: true
+  verification_provider: google_geocoding_v4
+  verified_at_utc: '2026-09-11T16:41:21.021740Z'
+destinations:
+- id: yitzhak-sadeh-4
+  label: Yitzhak Sadeh 4
+  place_id: ChIJCbgY-nlLHRURE2-Jxdt05lQ
+  formatted_address: Yitzhak Sadeh St 4, Tel Aviv-Yafo, Israel
+  verified: true
+  verification_provider: google_geocoding_v4
+  verified_at_utc: '2026-09-11T16:41:21.033153Z'
+- id: yigal-alon-4
+  label: Yigal Alon 4
+  place_id: EiZZaWdhbCBBbG9uIFN0IDQsIFRlbCBBdml2LVlhZm8sIElzcmFlbCIwEi4KFAoSCcFSAjxsSx0VEQm5caMxIhfmEAQqFAoSCXeNdeKfSx0VEWWycOcdrgTM
+  formatted_address: Yigal Alon St 4, Tel Aviv-Yafo, Israel
+  verified: true
+  verification_provider: google_geocoding_v4
+  verified_at_utc: '2026-09-11T16:41:21.041751Z'
+- id: hei-be-iyar-st-35
+  label: Hei be-Iyar St 35
+  place_id: ChIJFa5egpRLHRUR_gbHEBsv2Aw
+  formatted_address: Hei be-Iyar St 35, Tel Aviv-Yafo, Israel
+  verified: true
+  verification_provider: google_geocoding_v4
+  verified_at_utc: '2026-09-11T16:41:21.049636Z'
+- id: tuval-13-ramat-gan
+  label: Tuval 13, Ramat Gan
+  place_id: ChIJWb5I4sZLHRURT-iFnDXKPJ4
+  formatted_address: Tuval St 13, Ramat Gan, Israel
+  verified: true
+  verification_provider: google_geocoding_v4
+  verified_at_utc: '2026-09-11T16:41:21.215300Z'
+- id: herzl-2
+  label: Herzl 2
+  place_id: ChIJ75YKlZxMHRURazYCelzlrRQ
+  formatted_address: Herzl St 2, Tel Aviv-Yafo, 6688213, Israel
+  verified: true
+  verification_provider: google_geocoding_v4
+  verified_at_utc: '2026-09-11T16:41:21.418961Z'
+- id: tel-aviv-university
+  label: Tel Aviv University
+  place_id: ChIJ-wt232VJHRUR721e4jwavVk
+  formatted_address: Chaim Levanon St 55, Tel Aviv-Yafo, 6997801, Israel
+  verified: true
+  verification_provider: google_geocoding_v4
+  verified_at_utc: '2026-09-11T16:41:21.560911Z'
+times:
+- 07:00:00
+- 08:00:00
+- 09:00:00
+- '10:00:00'
+- '12:00:00'
+- '16:00:00'
+- '17:00:00'
+- '18:00:00'
+- '19:00:00'
+- '23:00:00'
+- 03:00:00
+transportation_ways:
+- car
+- bus
+- bike

@@ -6,6 +6,9 @@ The filename intentionally follows the project-requested ``adresses`` spelling.
 from __future__ import annotations
 
 import json
+import hashlib
+import re
+import unicodedata
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -40,6 +43,10 @@ class Address(BaseModel):
     place_id: str | None = None
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
+    formatted_address: str | None = None
+    verified: bool = False
+    verification_provider: str | None = None
+    verified_at_utc: str | None = None
 
     @model_validator(mode="after")
     def validate_location_form(self) -> Address:
@@ -52,6 +59,16 @@ class Address(BaseModel):
         if sum((has_address, has_place_id, has_latitude and has_longitude)) != 1:
             raise ValueError(
                 "provide exactly one of address, place_id, or latitude/longitude"
+            )
+        if self.verified and not (
+            has_place_id
+            and self.formatted_address
+            and self.verification_provider
+            and self.verified_at_utc
+        ):
+            raise ValueError(
+                "verified addresses require place_id, formatted_address, "
+                "verification_provider, and verified_at_utc"
             )
         return self
 
@@ -76,6 +93,86 @@ class Address(BaseModel):
         if self.place_id:
             return f"place_id:{self.place_id}"
         return f"{self.latitude},{self.longitude}"
+
+
+class AddressVerificationError(ValueError):
+    """Raised when Google does not return a specific Tel Aviv-area match."""
+
+
+def _address_id(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode()
+    slug = re.sub(r"[^a-z0-9]+", "-", normalized.lower()).strip("-")
+    if slug:
+        return slug
+    # Hebrew-only labels do not transliterate through the standard library.
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:8]
+    return f"address-{digest}"
+
+
+def _tel_aviv_query(address: str) -> str:
+    normalized = address.casefold()
+    named_localities = ("tel aviv", "תל אביב", "ramat gan", "רמת גן")
+    if any(locality in normalized for locality in named_localities):
+        return address.strip()
+    return f"{address.strip()}, Tel Aviv-Yafo, Israel"
+
+
+def add_new_adress(
+    address: str,
+    *,
+    identifier: str | None = None,
+    label: str | None = None,
+    client: GoogleMapsClient | None = None,
+    use_cache: bool = True,
+    data_path: Path = GEOCODING_RESULTS_PATH,
+) -> Address:
+    """Resolve, verify, and return a canonical Tel Aviv-area benchmark address.
+
+    The misspelled function name is retained to match the public module name and
+    requested API. A verified address routes by Place ID, while keeping its original
+    label and Google's formatted address as auditable metadata.
+    """
+
+    if not address.strip():
+        raise AddressVerificationError("address cannot be empty")
+    query = _tel_aviv_query(address)
+    rows = resolve_address(
+        query,
+        client=client,
+        save=True,
+        data_path=data_path,
+        language_code="en",
+        region_code="IL",
+        use_cache=use_cache,
+    )
+    accepted_types = {
+        "street_address",
+        "premise",
+        "establishment",
+        "point_of_interest",
+        "university",
+    }
+    for row in rows:
+        formatted = str(row.get("formatted_address", ""))
+        types = set(str(row.get("types", "")).split("|"))
+        normalized_formatted = formatted.casefold()
+        in_tel_aviv_area = any(
+            locality in normalized_formatted
+            for locality in ("tel aviv", "תל אביב", "ramat gan", "רמת גן")
+        )
+        if row.get("place_id") and in_tel_aviv_area and types.intersection(accepted_types):
+            return Address(
+                id=identifier or _address_id(address),
+                label=label or address.strip(),
+                place_id=str(row["place_id"]),
+                formatted_address=formatted,
+                verified=True,
+                verification_provider=str(row["provider"]),
+                verified_at_utc=str(row["resolved_at_utc"]),
+            )
+    raise AddressVerificationError(
+        f"Google did not return a specific Tel Aviv-area match for {address!r}"
+    )
 
 
 def save_geocoding_results(
